@@ -33,17 +33,17 @@ def compute_masked_flow_errors(predflows, gtflows):
     batch, seq = predflows.size(0), predflows.size(1) # B x S x 3 x H x W
     # Compute num pts not moving per mask
     # !!!!!!!!! > 1e-3 returns a ByteTensor and if u sum within byte tensors, the max value we can get is 255 !!!!!!!!!
-    motionmask = (gtflows.abs().sum(2) > 1e-3).type_as(gtflows) # B x S x 1 x H x W
-    err = (predflows - gtflows).mul_(1e2).pow(2).sum(2) # B x S x 1 x H x W
+    motionmask = (gtflows.abs() > 1e-3).type_as(gtflows) # B x S x 1 x H x W
+    err = (predflows - gtflows).mul_(1e2).pow(2).sum(1) # B x S x 1 x H x W
 
     # Compute errors for points that are supposed to move
-    motion_err = (err * motionmask).view(batch, seq, -1).sum(2) # Errors for only those points that are supposed to move
-    motion_npt = motionmask.view(batch, seq, -1).sum(2) # Num points that move (B x S)
+    motion_err = (err * motionmask).view(batch, seq, -1).sum(1) # Errors for only those points that are supposed to move
+    motion_npt = motionmask.view(batch, seq, -1).sum(1) # Num points that move (B x S)
 
     # Compute errors for points that are supposed to not move
     motionmask.eq_(0) # Mask out points that are not supposed to move
-    still_err = (err * motionmask).view(batch, seq, -1).sum(2)  # Errors for non-moving points
-    still_npt = motionmask.view(batch, seq, -1).sum(2)  # Num non-moving pts (B x S)
+    still_err = (err * motionmask).view(batch, seq, -1).sum(1)  # Errors for non-moving points
+    still_npt = motionmask.view(batch, seq, -1).sum(1)  # Num non-moving pts (B x S)
 
     # Bwds compatibility to old error
     full_err_avg  = (motion_err + still_err) / motion_npt

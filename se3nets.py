@@ -83,7 +83,6 @@ class Encoder(nn.Module):
     def forward(self, x):
         # Run conv-encoder to generate embedding
         p, j, c = x # pts, ctrl
-
         c1 = self.conv1(p)
         c2 = self.conv2(c1)
         c3 = self.conv3(c2)
@@ -251,7 +250,7 @@ class SE3Model(nn.Module):
     def forward(self, x, reset_hidden_state=False, train_iter=0):
         # Get input vars
         input_1, jtangles_1, ctrl_1 = x
-
+        input_1 = input_1[:, :3, ...]
         # Get delta-pose & mask predictions
         state_1        = self.encoder([input_1, jtangles_1, ctrl_1])
         mask_1         = self.maskdecoder(state_1, train_iter=train_iter)

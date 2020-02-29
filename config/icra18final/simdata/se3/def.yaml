@@ -1,7 +1,7 @@
 ---
 # Dataset options
 data:         [<path-to-data>/multijtdata/baxter_babbling_rarm_3.5hrs_Dec14_16/postprocessmotions_f,<path-to-data>/multijtdata/baxter_babbling_rarm_wfixjts_5hrs_Feb10_17/postprocessmotionshalf_f,<path-to-data>/singlejtdata/data2k/joint0/postprocessmotions_f, <path-to-data>/singlejtdata/data2k/joint1/postprocessmotions_f, <path-to-data>/singlejtdata/data2k/joint2/postprocessmotions_f, <path-to-data>/singlejtdata/data2k/joint3/postprocessmotions_f, <path-to-data>/singlejtdata/data2k/joint4/postprocessmotions_f, <path-to-data>/singlejtdata/data2k/joint5/postprocessmotions_f, <path-to-data>/singlejtdata/data2k/joint6/postprocessmotions_f]
-batch-size:   16
+batch-size:   32
 num-workers:  8
 train-per:    0.6
 val-per:      0.15
@@ -60,6 +60,6 @@ lr-decay:     0.1
 decay-epochs: 15
 
 # Display/Save options
-disp-freq: 50
+disp-freq: 2
 save-dir:  trained_nets/icra18final/simdata/se3/def
 disp-err-per-mask: False

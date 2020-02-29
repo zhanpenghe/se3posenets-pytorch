@@ -176,10 +176,12 @@ class BasicConv2D(nn.Module):
     def __init__(self, in_channels, out_channels, use_pool=False, use_bn=True, nonlinearity='prelu',
                  coord_conv=False, **kwargs):
         super(BasicConv2D, self).__init__()
+        print(kwargs['stride'])
         if coord_conv:
             self.conv = CoordConv(in_channels, out_channels, **kwargs)
         else:
             self.conv = nn.Conv2d(in_channels, out_channels, **kwargs)
+        print(self.conv)
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2) if use_pool else None
         self.bn = nn.BatchNorm2d(out_channels, eps=0.001) if use_bn else None
         self.nonlin = get_nonlinearity(nonlinearity)
@@ -198,6 +200,7 @@ class BasicDeconv2D(nn.Module):
     def __init__(self, in_channels, out_channels, use_bn=True, nonlinearity='prelu',
                  coord_conv=False, **kwargs):
         super(BasicDeconv2D, self).__init__()
+        print(kwargs)
         if coord_conv:
             self.deconv = CoordConvT(in_channels, out_channels, **kwargs)
         else:
@@ -222,6 +225,7 @@ class PreConv2D(nn.Module):
         super(PreConv2D, self).__init__()
         self.bn = nn.BatchNorm2d(in_channels, eps=0.001) if use_bn else None
         self.nonlin = get_nonlinearity(nonlinearity)
+        print(kwargs)
         if coord_conv:
             self.conv = CoordConv(in_channels, out_channels, **kwargs)
         else:
