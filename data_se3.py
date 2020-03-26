@@ -4,6 +4,7 @@ from torch.utils.data import Dataset
 import h5py
 import pybullet as p
 from utils import get_pointcloud
+from torch.utils.data import DataLoader
 
 
 class DataSE3(Dataset):
@@ -69,8 +70,8 @@ class DataSE3(Dataset):
         world_pts = np.transpose(
             np.dot(self.camera_pose[0:3, 0:3], np.transpose(cam_pts)) + np.tile(self.camera_pose[0:3, 3:], (1, cam_pts.shape[0])))
         W, H = depth_image.shape
-        world_pts.resize([W, H, 3])
-        rgb_pts.resize([W, H, 3])
+        world_pts = world_pts.reshape([W, H, 3])
+        rgb_pts = rgb_pts.reshape([W, H, 3])
         if self.use_color:
             state = np.concatenate([world_pts, rgb_pts / 255.0], 2)
         else:
@@ -84,7 +85,23 @@ if __name__ == '__main__':
 
     data_path = '../shapenet5-final/'
     data = DataSE3(data_path=data_path, split='train', seq_len=10, direction_num=10, object_num=6, select_num=None, use_color=False)
-
+    loader = DataLoader(
+            dataset=data,
+            batch_size=16,
+            shuffle=True,
+            num_workers=1,
+            drop_last=True
+    )
+    from utils import imwrite
+    for _ in range(100):
+        batch = iter(loader).next()
+        pts = batch['init_state']
+        for d in range(3):
+            pc = pts.cpu().detach().numpy()[0, d, ...]
+            pc -= np.min(pc)
+            pc /= np.max(pc)
+            imwrite('pc_data_{}.png'.format(d), pc)
+        exit()
     import ipdb
     ipdb.set_trace()
     print('Done with loading shapenet data')

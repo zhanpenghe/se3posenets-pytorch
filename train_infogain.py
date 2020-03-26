@@ -147,12 +147,12 @@ def main():
     datas, loaders = {}, {}
     data_path = '../shapenet5-final/'
     for split in ['train', 'test']:
-        datas[split] = DataSE3(data_path=data_path, split=split, seq_len=10, direction_num=10, object_num=6, select_num=None, use_color=False)
+        datas[split] = DataSE3(data_path=data_path, split=split, seq_len=1, direction_num=8, object_num=6, select_num=1, use_color=True)
         loaders[split] = DataLoader(
             dataset=datas[split],
             batch_size=args.batch_size,
             shuffle=True,
-            num_workers=2,
+            num_workers=1,
             drop_last=True
         )
 
@@ -324,7 +324,7 @@ def main():
     ### Load the model
     num_train_iter = 0
     if args.use_se3_nets:
-        model = se3nets.SE3Model(num_ctrl=12, num_se3=args.num_se3,
+        model = se3nets.SE3Model(num_ctrl=10, num_se3=args.num_se3,
                         se3_type=args.se3_type, use_pivot=args.pred_pivot,
                         input_channels=num_input_channels, use_bn=args.batch_norm, nonlinearity=args.nonlin,
                         init_transse3_iden=args.init_transse3_iden,
@@ -333,7 +333,7 @@ def main():
                         wide=args.wide_model, use_jt_angles=args.use_jt_angles,
                         num_state=args.num_state_net)
     else:
-        model = flownets.FlowNet(num_ctrl=args.num_ctrl, num_state=args.num_state_net,
+        model = flownets.FlowNet(num_ctrl=10, num_state=args.num_state_net,
                                  input_channels=num_input_channels, use_bn=args.batch_norm, pre_conv=args.pre_conv,
                                  nonlinearity=args.nonlin, init_flow_iden=args.init_flow_iden,
                                  use_jt_angles=args.use_jt_angles)
@@ -341,8 +341,10 @@ def main():
         model.cuda() # Convert to CUDA if enabled
 
     ### Load optimizer
-    optimizer = helpers.load_optimizer(args.optimization, model.parameters(), lr=args.lr,
-                               momentum=args.momentum, weight_decay=args.weight_decay)
+    # optimizer = helpers.load_optimizer(args.optimization, model.parameters(), lr=args.lr,
+    #                            momentum=args.momentum, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, betas=(0.9, 0.95))
+
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -435,14 +437,8 @@ def main():
             'best_loss'  : best_val_loss,
             'best_epoch' : best_epoch,
             'train_stats': {'stats': train_stats,
-                            'niters': train_loader.niters, 'nruns': train_loader.nruns,
-                            'totaliters': train_loader.iteration_count(),
-                            # 'ids': train_ids,
                             },
             'val_stats'  : {'stats': val_stats,
-                            'niters': val_loader.niters, 'nruns': val_loader.nruns,
-                            'totaliters': val_loader.iteration_count(),
-                            # 'ids': val_ids,
                             },
             'train_iter' : num_train_iter,
             'model_state_dict' : model.state_dict(),
@@ -473,22 +469,12 @@ def main():
     args.imgdisp_freq = 10 * args.disp_freq # Tensorboard log frequency for the image data
     sampler = torch.utils.data.dataloader.SequentialSampler(test_dataset)  # Run sequentially along the test dataset
     test_loader = DataEnumerator(util.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False,
-                                    num_workers=args.num_workers, sampler=sampler, pin_memory=args.use_pin_memory,
+                                    num_workers=2, sampler=sampler, pin_memory=args.use_pin_memory,
                                     collate_fn=test_dataset.collate_batch))
     test_stats = iterate(test_loader, model, tblogger, len(test_loader),
                          mode='test', epoch=args.epochs)
     print('==== Best validation loss: {} was from epoch: {} ===='.format(best_val_loss,
                                                                          best_epoch))
-
-    # Save final test error
-    save_checkpoint({
-        'args': args,
-        'test_stats': {'stats': test_stats,
-                       'niters': test_loader.niters, 'nruns': test_loader.nruns,
-                       'totaliters': test_loader.iteration_count(),
-                    #    'ids': test_stats.data_ids,
-                       },
-    }, False, savedir=args.save_dir, filename='test_stats.pth.tar')
 
     # Close log file
     logfile.close()
@@ -533,29 +519,32 @@ def iterate(data_loader, model, tblogger, num_iters,
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     pt_wt = args.pt_wt * args.loss_scale
     itr_cnts = 0
-    for i in xrange(num_iters):
+    i = 0
+    loss_func = torch.nn.MSELoss()
+    for sample in data_loader:
         # ============ Load data ============#
         # Start timer
         start = time.time()
 
         # Get a sample
-        sample = iter(data_loader).next()
         itr_cnts += 1
+        i += 1
         # stats.data_ids.append(sample['id'].clone())
 
         # Get inputs and targets (as variables)
         # Currently batchsize is the outer dimension
         pts       = util.req_grad(sample['init_state'].to(device), train)  # Need gradients
         ctrls     = util.req_grad(sample['action'].to(device), train)  # Need gradients
-        fwdflows  = util.req_grad(sample['scene_flow'].to(device), False)  # No gradients
+        fwdflows  = util.req_grad(sample['scene_flow'].to(device), False) * 10  # No gradients
         # fwdvis    = util.req_grad(sample['fwdvisibilities'].float().to(device), False)
 
+        print(ctrls.shape)
         # Get jt angles
         # jtangles = util.req_grad(sample['actctrlconfigs'].to(device), train)  # [:, :, args.ctrlids_in_state].type(deftype), requires_grad=train)
 
         # Measure data loading time
         data_time.update(time.time() - start)
-
+        
         # ============ FWD pass + Compute loss ============#
         # Start timer
         start = time.time()
@@ -569,7 +558,7 @@ def iterate(data_loader, model, tblogger, num_iters,
             deltaposes.append(deltapose)
             masks.append(mask)
         else:
-            flows = model([pts[:, 0], jtangles[:, 0], ctrls[:, 0]])
+            flows = model([pts, None, ctrls])
         nextpts = pts[:, :3, ...] + flows  # Add flow to get next prediction
 
         # Append to list of predictions
@@ -584,8 +573,9 @@ def iterate(data_loader, model, tblogger, num_iters,
         # If motion-normalized loss, pass in GT flows
         if args.motion_norm_loss:
             motion = targets  # Use either delta-flows or full-flows
-            loss = pt_wt * ctrlnets.MotionNormalizedLoss3D(inputs, targets, motion=motion,
-                                                           loss_type=args.loss_type, wts=torch.Tensor([1.]).to(device))
+            # loss = pt_wt * ctrlnets.MotionNormalizedLoss3D(inputs, targets, motion=motion,
+            #                                                loss_type=args.loss_type, wts=torch.Tensor([1.]).to(device))
+            loss = pt_wt / 100 * loss_func(inputs, targets)
         else:
             loss = pt_wt * ctrlnets.Loss3D(inputs, targets, loss_type=args.loss_type, wts=1)
         flowloss = torch.Tensor([loss.item()])
@@ -613,7 +603,15 @@ def iterate(data_loader, model, tblogger, num_iters,
 
             # Measure BWD time
             bwd_time.update(time.time() - start)
-
+            from utils import imwrite, flow2im
+            imwrite('pred.png', flow2im(inputs.cpu().detach().numpy()[0, :2, ...]))
+            imwrite('gt.png', flow2im(targets.cpu().detach().numpy()[0, :2, ...]))
+#            imwrite('mask_pred.png', mask.cpu().detach().numpy()[0])
+            for d in range(3):
+                pc = pts.cpu().detach().numpy()[0, d, ...]
+                pc -= np.min(pc)
+                pc /= np.max(pc)
+                imwrite('pc_{}.png'.format(d), pc)
         # ============ Visualization ============#
         # Make sure to not add to the computation graph (will memory leak otherwise)!
         with torch.no_grad():
@@ -668,7 +666,6 @@ def iterate(data_loader, model, tblogger, num_iters,
                             'Bwd: {bwd.val:.3f} ({bwd.avg:.3f}), '
                             'Viz: {viz.val:.3f} ({viz.avg:.3f})'.format(
                         data=data_time, fwd=fwd_time, bwd=bwd_time, viz=viz_time))
-
                 ### TensorBoard logging
                 # (1) Log the scalar values
                 iterct = itr_cnts # Get total number of iterations so far
@@ -709,14 +706,13 @@ def iterate(data_loader, model, tblogger, num_iters,
                         info[mode+ '-masks'] = util.to_np(maskdisp.narrow(0,0,1))
                     for tag, images in info.items():
                         tblogger.image_summary(tag, images, iterct)
-
             # Measure viz time
             viz_time.update(time.time() - start)
 
     ### Print stats at the end
     print('========== Mode: {}, Epoch: {}, Final results =========='.format(mode, epoch))
     print_stats(mode, epoch=epoch, curr=num_iters, total=num_iters,
-                samplecurr=data_loader.niters+1, sampletotal=len(data_loader),
+                samplecurr=itr_cnts+1, sampletotal=len(data_loader),
                 stats=stats)
     print('========================================================')
 

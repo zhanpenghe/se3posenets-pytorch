@@ -47,7 +47,17 @@ class FlowNet(nn.Module):
         self.ctrlencoder = nn.Sequential(
                                 nn.Linear(num_ctrl, 128),
                                 ctrlnets.get_nonlinearity(nonlinearity),
-                                nn.Linear(128, 256) # Get encoded state
+                                nn.Linear(128, 256), # Get encoded state
+                                ctrlnets.get_nonlinearity(nonlinearity),
+                                nn.Linear(256, 256),
+                                ctrlnets.get_nonlinearity(nonlinearity),
+                                nn.Linear(256, 256),
+                                ctrlnets.get_nonlinearity(nonlinearity),
+                                nn.Linear(256, 256),
+                                ctrlnets.get_nonlinearity(nonlinearity),
+                                nn.Linear(256, 256),
+                                ctrlnets.get_nonlinearity(nonlinearity),
+                                nn.Linear(256, 256),
                            )
 
         ###### Jt angle encoder
@@ -100,7 +110,7 @@ class FlowNet(nn.Module):
     def forward(self, x):
         # Run the forward pass
         p, j, c = x  # Pose, Jtangles, Control
-
+        p = p[:, :3, ...]
         # Run conv-encoder to generate embedding
         c1 = self.conv1(p)
         c2 = self.conv2(c1)
